@@ -1,3 +1,5 @@
+// Add at the top with other declarations
+let collectedPosts = [];  // Changed from Set to Array to preserve order and allow JSON export
 let isExtensionEnabled = true;
 let keywords = new Set(['kill', 'abuse', 'assault', 'torture', 'sexual']);
 let hoverTimers = new WeakMap();
@@ -14,51 +16,94 @@ chrome.storage.onChanged.addListener((changes) => {
   if (changes.keywords) keywords = new Set(changes.keywords.newValue);
 });
 
-// Main detection function
+// Main detection function - Fixed version
 function detectSuspiciousPosts() {
   const posts = document.querySelectorAll('div[data-post], article, .post');
-  
+
   posts.forEach(post => {
     const text = post.textContent.toLowerCase();
-    const isSuspicious = Array.from(keywords).some(keyword => 
+    // Create an array of detected keywords in the post
+    const detectedKeywords = Array.from(keywords).filter(keyword => 
       text.includes(keyword.toLowerCase())
     );
 
-    if (isSuspicious) {
+    // Check if suspicious keywords are found
+    if (detectedKeywords.length > 0) {
       post.style.border = '2px solid red';
       post.dataset.suspicious = 'true';
 
-      // Hover handling
+      // Prepare the post data
+      const postData = {
+        text: post.textContent.trim().substring(0, 500), // Limit length
+        url: window.location.href,
+        timestamp: new Date().toISOString(),
+        detectedKeywords: detectedKeywords
+      };
+
+      console.log('Suspicious Post Detected:', postData);
+
+      // Add to collected posts array
+      collectedPosts.push(postData);
+
+      // Event handlers
       post.addEventListener('mouseover', handleMouseOver);
       post.addEventListener('mouseout', handleMouseOut);
-      
-      // Click handling
       post.addEventListener('click', handleClick);
     }
   });
 }
 
-// Event handlers
-function handleMouseOver(e) {
+// Event handler functions (You can customize these)
+function handleMouseOver(event) {
+  event.currentTarget.style.backgroundColor = 'rgba(255, 0, 0, 0.1)';
   if (!isExtensionEnabled) return;
-  const post = e.currentTarget;
+  const post = event.currentTarget;
   hoverTimers.set(post, setTimeout(() => {
     showAlert('Warning: This post contains suspicious content!');
   }, 3000));
 }
 
-function handleMouseOut(e) {
-  const post = e.currentTarget;
+function handleMouseOut(event) {
+  event.currentTarget.style.backgroundColor = '';
+  const post = event.currentTarget;
   clearTimeout(hoverTimers.get(post));
 }
 
-function handleClick(e) {
+function handleClick(event) {
+  const post = event.currentTarget;
   if (!isExtensionEnabled) return;
-  if (e.currentTarget.dataset.suspicious) {
-    e.preventDefault();
+  if (post.dataset.suspicious) {
     showAlert('Warning: This post was flagged as potentially dangerous!');
   }
 }
+
+// Download the collected posts as JSON
+function downloadJSON() {
+  // If no suspicious posts have been detected, disable download
+  if (collectedPosts.length === 0) {
+    alert('No suspicious posts detected. Cannot download an empty JSON file.');
+    return;
+  }
+
+  const blob = new Blob([JSON.stringify(collectedPosts, null, 2)], { type: 'application/json' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'suspicious_posts.json';
+  link.click();
+}
+
+// Add a button to download the JSON file (this should be done dynamically in your UI)
+const downloadButton = document.createElement('button');
+downloadButton.textContent = 'Download Suspicious Posts';
+downloadButton.onclick = downloadJSON;
+document.body.appendChild(downloadButton);
+
+// Additional code for managing collected posts and sending alerts can go here
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.type === 'ALERT_USER') {
+    alert('Suspicious activity detected!');
+  }
+});
 
 // Alert system
 function showAlert(message) {
