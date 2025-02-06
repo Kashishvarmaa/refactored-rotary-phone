@@ -1,0 +1,4 @@
+.DS_Store
+myenv/ 
+node_modules/
+.env
