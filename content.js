@@ -1,5 +1,5 @@
 // Add at the top with other declarations
-let collectedPosts = [];  // Changed from Set to Array to preserve order and allow JSON export
+let collectedPosts = new Set();
 let isExtensionEnabled = true;
 let keywords = new Set(['kill', 'abuse', 'assault', 'torture', 'sexual']);
 let hoverTimers = new WeakMap();
@@ -40,10 +40,17 @@ function detectSuspiciousPosts() {
         detectedKeywords: detectedKeywords
       };
 
+      // Log the post data to the console
       console.log('Suspicious Post Detected:', postData);
 
-      // Add to collected posts array
-      collectedPosts.push(postData);
+      const postHash = btoa(encodeURIComponent(JSON.stringify(postData)));
+      if (!collectedPosts.has(postHash)) {
+        collectedPosts.add(postHash);
+        chrome.runtime.sendMessage({
+          type: 'SAVE_POST',
+          data: postData
+        });
+      }
 
       // Event handlers
       post.addEventListener('mouseover', handleMouseOver);
@@ -77,28 +84,8 @@ function handleClick(event) {
   }
 }
 
-// Download the collected posts as JSON
-function downloadJSON() {
-  // If no suspicious posts have been detected, disable download
-  if (collectedPosts.length === 0) {
-    alert('No suspicious posts detected. Cannot download an empty JSON file.');
-    return;
-  }
-
-  const blob = new Blob([JSON.stringify(collectedPosts, null, 2)], { type: 'application/json' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = 'suspicious_posts.json';
-  link.click();
-}
-
-// Add a button to download the JSON file (this should be done dynamically in your UI)
-const downloadButton = document.createElement('button');
-downloadButton.textContent = 'Download Suspicious Posts';
-downloadButton.onclick = downloadJSON;
-document.body.appendChild(downloadButton);
-
 // Additional code for managing collected posts and sending alerts can go here
+// For example, listening to messages to show notifications
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === 'ALERT_USER') {
     alert('Suspicious activity detected!');
